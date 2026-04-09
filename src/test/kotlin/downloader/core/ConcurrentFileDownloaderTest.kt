@@ -10,10 +10,14 @@ import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
+import java.util.concurrent.CancellationException
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class ConcurrentFileDownloaderTest {
@@ -47,6 +51,50 @@ class ConcurrentFileDownloaderTest {
 
             assertTrue(awaitItem() is DownloadState.Success)
             awaitComplete()
+        }
+    }
+
+    @Test
+    fun `emits Error state when network throws`() = runTest {
+        val mockNetwork = mockk<NetworkClient>()
+        val mockMath = mockk<ChunkCalculator>()
+        val mockDisk = mockk<ConcurrentFileWriter>(relaxed = true)
+
+        val networkException = RuntimeException("Connection timed out")
+        coEvery { mockNetwork.fetchFileInfo(any()) } throws networkException
+        every { mockMath.calculate(any(), any()) } returns listOf(ByteRange(0, 99))
+
+        val downloader = ConcurrentFileDownloader(
+            mockNetwork, mockMath, mockDisk, UnconfinedTestDispatcher(testScheduler)
+        )
+
+        downloader.download("http://random-url.com", 1).test {
+            assertTrue(awaitItem() is DownloadState.Starting)
+
+            val errorState = awaitItem() as DownloadState.Error
+            assertEquals(networkException, errorState.exception)
+            assertEquals("Connection timed out", errorState.exception.message)
+
+            awaitComplete()
+        }
+    }
+
+    @Test
+    fun `CancellationException is rethrown and not swallowed as Error`() = runTest {
+        val mockNetwork = mockk<NetworkClient>()
+        val mockMath = mockk<ChunkCalculator>()
+        val mockDisk = mockk<ConcurrentFileWriter>(relaxed = true)
+
+        coEvery { mockNetwork.fetchFileInfo(any()) } throws CancellationException("Cancelled by caller")
+        every { mockMath.calculate(any(), any()) } returns listOf(ByteRange(0, 99))
+
+        val downloader = ConcurrentFileDownloader(
+            mockNetwork, mockMath, mockDisk, UnconfinedTestDispatcher(testScheduler)
+        )
+
+        // The flow itself should be cancelled, not emit an Error state
+        assertThrows<CancellationException> {
+            downloader.download("http://random-url.com", 1).toList()
         }
     }
 }
