@@ -11,10 +11,10 @@ import java.io.File
 
 private val logger = KotlinLogging.logger {}
 
-fun main() = runBlocking {
-    val url = "http://localhost:8080/my-local-file.txt"
-    val destination = File("data/downloaded-file.txt")
-    val threads = 4
+fun main(args: Array<String>) = runBlocking {
+    val url = args.getOrElse(0) { "http://localhost:8080/my-local-file.txt" }
+    val destination = File(args.getOrElse(1) { "data/downloaded-file.txt" })
+    val threads = args.getOrElse(2) { "4" }.toInt()
 
     NetworkClient().use { networkClient ->
         ConcurrentFileWriter(destination).use { fileWriter ->
