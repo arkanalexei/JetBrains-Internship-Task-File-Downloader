@@ -1,0 +1,2 @@
+This is a dummy payload for integration testing purposes.
+It needs to exist on disk so the embedded Ktor server can respondFile() successfully.
