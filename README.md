@@ -119,6 +119,21 @@ Open `build/reports/jacoco/test/html/index.html` in your browser.
 | `ConcurrentFileDownloaderTest`   | Full state sequence, error emission, CancellationException propagation              |
 | `DownloaderIntegrationTest`      | End-to-end download against a real embedded Ktor server                             |
 
+## Further Improvements
+
+The following were intentionally omitted to keep the implementation focused on the core requirements, but would be
+natural next steps in a production context:
+
+- Retry logic. A failed chunk currently cancels the entire download via structured concurrency. A production
+  downloader would retry individual chunks with exponential backoff before propagating the error
+- Timeout configuration. The Ktor `HttpClient` has no timeout set, meaning a hung connection would stall
+  indefinitely. Configuring `connectTimeoutMillis` and `socketTimeoutMillis` would make the downloader resilient to
+  unresponsive servers
+- Buffer ownership. The same `ByteArray` buffer is reused across loop iterations in `NetworkClient.streamChunk` and
+  passed by reference to `onBytesReceived`. This is safe given the current synchronous callback usage, but if the
+  callback were ever made asynchronous, it would cause data corruption. A defensive fix would be to copy the buffer
+  before passing it: `onBytesReceived(buffer.copyOf(bytesRead), bytesRead)`
+
 ## Dependencies
 
 | Library                  | Purpose                               |
