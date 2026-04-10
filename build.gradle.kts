@@ -1,6 +1,11 @@
 plugins {
     kotlin("jvm") version "2.3.10"
     jacoco
+    application
+}
+
+application {
+    mainClass.set("downloader.MainKt")
 }
 
 group = "downloader"
